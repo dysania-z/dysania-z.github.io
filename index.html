@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI文本检测系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            animation: slideIn 0.8s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-label {
+            display: block;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .text-input {
+            width: 100%;
+            min-height: 150px;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: all 0.3s ease;
+            background: #f7fafc;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+            flex: 0 0 auto;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .result-section {
+            display: none;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .confidence-container {
+            margin-bottom: 25px;
+        }
+
+        .confidence-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .confidence-text {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .confidence-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: white;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: width 1s ease-out;
+            position: relative;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .ai-indicator {
+            background: linear-gradient(135deg, #fc8181, #f56565);
+        }
+
+        .human-indicator {
+            background: linear-gradient(135deg, #68d391, #48bb78);
+        }
+
+        .decision-helper {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .decision-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .decision-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+        }
+
+        .decision-text {
+            color: #4a5568;
+            line-height: 1.6;
+        }
+
+        .loading {
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            display: none;
+            background: linear-gradient(135deg, #fed7d7, #feb2b2);
+            color: #c53030;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #e53e3e;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI文本检测系统</h1>
+            <p>输入文本，智能检测是否由人工智能生成</p>
+        </div>
+
+        <div class="input-section">
+            <label for="textInput" class="input-label">请输入待检测的文本：</label>
+            <textarea 
+                id="textInput" 
+                class="text-input" 
+                placeholder="在此输入您想要检测的文本内容...&#10;&#10;系统将分析文本特征，判断是否由AI生成，并提供置信度评分。"
+            ></textarea>
+        </div>
+
+        <div class="button-group">
+            <button id="detectBtn" class="btn btn-primary">
+                🔍 开始检测
+            </button>
+            <button id="clearBtn" class="btn btn-secondary">
+                🗑️ 清空
+            </button>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+        </div>
+
+        <div id="errorMessage" class="error-message">
+            检测过程中出现错误，请稍后重试。
+        </div>
+
+        <div id="resultSection" class="result-section">
+            <div class="result-card">
+                <div class="confidence-container">
+                    <div class="confidence-label">
+                        <span class="confidence-text">AI生成置信度</span>
+                        <span id="confidenceValue" class="confidence-value">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="decision-helper">
+                    <div class="decision-title">
+                        <div class="decision-icon"></div>
+                        辅助决策建议
+                    </div>
+                    <div id="decisionText" class="decision-text">
+                        等待检测结果...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class AITextDetector {
+            constructor() {
+                this.initializeElements();
+                this.bindEvents();
+            }
+
+            initializeElements() {
+                this.textInput = document.getElementById('textInput');
+                this.detectBtn = document.getElementById('detectBtn');
+                this.clearBtn = document.getElementById('clearBtn');
+                this.loading = document.getElementById('loading');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.resultSection = document.getElementById('resultSection');
+                this.confidenceValue = document.getElementById('confidenceValue');
+                this.progressFill = document.getElementById('progressFill');
+                this.decisionText = document.getElementById('decisionText');
+            }
+
+            bindEvents() {
+                this.detectBtn.addEventListener('click', () => this.detectText());
+                this.clearBtn.addEventListener('click', () => this.clearInput());
+                this.textInput.addEventListener('input', () => this.handleInputChange());
+            }
+
+            handleInputChange() {
+                const hasText = this.textInput.value.trim().length > 0;
+                this.detectBtn.disabled = !hasText;
+                
+                if (!hasText) {
+                    this.hideResults();
+                }
+            }
+
+            async detectText() {
+                const text = this.textInput.value.trim();
+                
+                if (!text) {
+                    this.showError('请输入要检测的文本');
+                    return;
+                }
+
+                this.showLoading();
+                this.hideError();
+
+                try {
+                    // 这里是后端API接口调用点
+                    const confidence = await this.callBackendAPI(text);
+                    this.showResults(confidence);
+                } catch (error) {
+                    this.showError('检测服务暂时不可用，请稍后重试');
+                    console.error('Detection error:', error);
+                }
+            }
+
+            async callBackendAPI(text) {
+                // TODO: 替换为实际的后端API端点
+                // const response = await fetch('/api/detect', {
+                //     method: 'POST',
+                //     headers: {
+                //         'Content-Type': 'application/json',
+                //     },
+                //     body: JSON.stringify({ text: text })
+                // });
+                // 
+                // if (!response.ok) {
+                //     throw new Error('API request failed');
+                // }
+                // 
+                // const result = await response.json();
+                // return result.confidence; // 期望返回0-1之间的置信度值
+
+                // 模拟API调用（用于演示）
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        // 模拟返回置信度（0-1之间的值）
+                        const mockConfidence = Math.random() * 0.6 + 0.2; // 0.2-0.8之间
+                        resolve(mockConfidence);
+                    }, 2000);
+                });
+            }
+
+            showLoading() {
+                this.loading.style.display = 'flex';
+                this.detectBtn.disabled = true;
+                this.hideResults();
+            }
+
+            hideLoading() {
+                this.loading.style.display = 'none';
+                this.detectBtn.disabled = false;
+            }
+
+            showResults(confidence) {
+                this.hideLoading();
+                
+                const percentage = Math.round(confidence * 100);
+                const isAI = confidence > 0.5;
+                
+                // 更新置信度显示
+                this.confidenceValue.textContent = `${percentage}%`;
+                this.confidenceValue.className = isAI ? 'confidence-value ai-indicator' : 'confidence-value human-indicator';
+                
+                // 更新进度条
+                this.progressFill.style.width = `${percentage}%`;
+                this.progressFill.style.background = isAI ? 
+                    'linear-gradient(90deg, #fc8181, #f56565)' : 
+                    'linear-gradient(90deg, #68d391, #48bb78)';
+                
+                // 更新决策建议
+                this.updateDecisionText(confidence, isAI);
+                
+                // 显示结果
+                this.resultSection.style.display = 'block';
+            }
+
+            updateDecisionText(confidence, isAI) {
+                let text = '';
+                
+                if (confidence >= 0.8) {
+                    text = isAI ? 
+                        '🚨 高度疑似AI生成：文本表现出明显的AI生成特征，建议进行人工审核。' :
+                        '✅ 高度疑似人类创作：文本具有明显的人类写作特征，可信度较高。';
+                } else if (confidence >= 0.6) {
+                    text = isAI ? 
+                        '⚠️ 较可能是AI生成：检测到一些AI写作模式，建议结合其他因素判断。' :
+                        '👍 较可能是人类创作：文本展现出人类写作风格，但建议进一步确认。';
+                } else if (confidence >= 0.4) {
+                    text = '🤔 结果不确定：置信度中等，建议结合上下文、写作背景等因素综合判断。';
+                } else {
+                    text = isAI ? 
+                        '👍 较可能是人类创作：检测到较少AI特征，倾向于人类创作。' :
+                        '⚠️ 较可能是AI生成：虽然置信度不高，但仍建议谨慎对待。';
+                }
+                
+                this.decisionText.textContent = text;
+            }
+
+            hideResults() {
+                this.resultSection.style.display = 'none';
+            }
+
+            clearInput() {
+                this.textInput.value = '';
+                this.detectBtn.disabled = true;
+                this.hideResults();
+                this.hideError();
+                this.textInput.focus();
+            }
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.style.display = 'block';
+                this.hideLoading();
+            }
+
+            hideError() {
+                this.errorMessage.style.display = 'none';
+            }
+        }
+
+        // 初始化应用
+        document.addEventListener('DOMContentLoaded', () => {
+            new AITextDetector();
+        });
+    </script>
+</body>
+</html>
