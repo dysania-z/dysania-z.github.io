@@ -283,6 +283,60 @@
             border-left: 4px solid #e53e3e;
         }
 
+        .config-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .config-label {
+            display: block;
+            color: #2d3748;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .config-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .config-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+
+        .metadata-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .metadata-title {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .metadata-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 20px;
@@ -304,6 +358,17 @@
         <div class="header">
             <h1>🤖 AI文本检测系统</h1>
             <p>输入文本，智能检测是否由人工智能生成</p>
+        </div>
+
+        <div class="config-section">
+            <label for="apiUrl" class="config-label">后端API地址:</label>
+            <input 
+                id="apiUrl" 
+                type="text" 
+                class="config-input" 
+                value="http://localhost:8000"
+                placeholder="请输入后端API地址 (例如: http://localhost:8000)"
+            >
         </div>
 
         <div class="input-section">
@@ -353,6 +418,22 @@
                         等待检测结果...
                     </div>
                 </div>
+
+                <div class="metadata-section">
+                    <div class="metadata-title">检测信息</div>
+                    <div class="metadata-item">
+                        <span>预测结果:</span>
+                        <span id="predictionResult">-</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span>文本哈希:</span>
+                        <span id="textHash">-</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span>检测时间:</span>
+                        <span id="detectionTime">-</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -365,6 +446,7 @@
             }
 
             initializeElements() {
+                this.apiUrl = document.getElementById('apiUrl');
                 this.textInput = document.getElementById('textInput');
                 this.detectBtn = document.getElementById('detectBtn');
                 this.clearBtn = document.getElementById('clearBtn');
@@ -374,6 +456,9 @@
                 this.confidenceValue = document.getElementById('confidenceValue');
                 this.progressFill = document.getElementById('progressFill');
                 this.decisionText = document.getElementById('decisionText');
+                this.predictionResult = document.getElementById('predictionResult');
+                this.textHash = document.getElementById('textHash');
+                this.detectionTime = document.getElementById('detectionTime');
             }
 
             bindEvents() {
@@ -403,40 +488,45 @@
                 this.hideError();
 
                 try {
-                    // 这里是后端API接口调用点
-                    const confidence = await this.callBackendAPI(text);
-                    this.showResults(confidence);
+                    const result = await this.callBackendAPI(text);
+                    this.showResults(result);
                 } catch (error) {
-                    this.showError('检测服务暂时不可用，请稍后重试');
+                    this.showError(error.message || '检测服务暂时不可用，请稍后重试');
                     console.error('Detection error:', error);
                 }
             }
 
             async callBackendAPI(text) {
-                // TODO: 替换为实际的后端API端点
-                // const response = await fetch('/api/detect', {
-                //     method: 'POST',
-                //     headers: {
-                //         'Content-Type': 'application/json',
-                //     },
-                //     body: JSON.stringify({ text: text })
-                // });
-                // 
-                // if (!response.ok) {
-                //     throw new Error('API request failed');
-                // }
-                // 
-                // const result = await response.json();
-                // return result.confidence; // 期望返回0-1之间的置信度值
+                const baseUrl = this.apiUrl.value.trim() || 'http://localhost:8000';
+                const endpoint = `${baseUrl}/detect/single`;
+                
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ text: text })
+                    });
 
-                // 模拟API调用（用于演示）
-                return new Promise((resolve) => {
-                    setTimeout(() => {
-                        // 模拟返回置信度（0-1之间的值）
-                        const mockConfidence = Math.random() * 0.6 + 0.2; // 0.2-0.8之间
-                        resolve(mockConfidence);
-                    }, 2000);
-                });
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error('API端点不存在，请检查后端API地址是否正确');
+                        } else if (response.status === 500) {
+                            throw new Error('服务器内部错误，请检查后端服务状态');
+                        } else {
+                            throw new Error(`HTTP错误: ${response.status}`);
+                        }
+                    }
+
+                    const result = await response.json();
+                    return result;
+                } catch (error) {
+                    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                        throw new Error('无法连接到后端服务，请检查API地址和服务状态');
+                    }
+                    throw error;
+                }
             }
 
             showLoading() {
@@ -450,11 +540,15 @@
                 this.detectBtn.disabled = false;
             }
 
-            showResults(confidence) {
+            showResults(result) {
                 this.hideLoading();
                 
+                // 从后端API结果中提取数据
+                const { prediction, confidence, text_hash } = result;
+                
+                // 计算显示用的置信度百分比
                 const percentage = Math.round(confidence * 100);
-                const isAI = confidence > 0.5;
+                const isAI = prediction === 1;
                 
                 // 更新置信度显示
                 this.confidenceValue.textContent = `${percentage}%`;
@@ -468,6 +562,9 @@
                 
                 // 更新决策建议
                 this.updateDecisionText(confidence, isAI);
+                
+                // 更新元数据
+                this.updateMetadata(prediction, text_hash);
                 
                 // 显示结果
                 this.resultSection.style.display = 'block';
@@ -493,6 +590,18 @@
                 }
                 
                 this.decisionText.textContent = text;
+            }
+
+            updateMetadata(prediction, textHash) {
+                // 更新预测结果
+                this.predictionResult.textContent = prediction === 1 ? 'AI生成' : '人类创作';
+                
+                // 更新文本哈希
+                this.textHash.textContent = textHash.substring(0, 8) + '...';
+                
+                // 更新检测时间
+                const now = new Date();
+                this.detectionTime.textContent = now.toLocaleTimeString('zh-CN');
             }
 
             hideResults() {
