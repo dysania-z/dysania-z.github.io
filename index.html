@@ -621,7 +621,7 @@
             
             createResultCardHtml(result, originalText = null) {
                 const { prediction, confidence, text_hash } = result;
-                const percentage = Math.round(confidence);
+                const percentage = confidence;
                 const isAI = prediction === 1;
                 const decisionText = this.getDecisionText(confidence, isAI);
                 const resultClass = isAI ? 'ai' : 'human';
