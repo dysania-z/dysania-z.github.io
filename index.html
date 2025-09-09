@@ -621,7 +621,6 @@
             
             createResultCardHtml(result, originalText = null) {
                 const { prediction, confidence, text_hash } = result;
-                const percentage = confidence*100;
                 const isAI = prediction === 1;
                 const decisionText = this.getDecisionText(confidence, isAI);
                 const resultClass = isAI ? 'ai' : 'human';
@@ -636,10 +635,10 @@
                     <div class="confidence-container">
                         <div class="confidence-label">
                             <span class="confidence-text">AI生成置信度</span>
-                            <span class="confidence-value ${confidenceBg}">${percentage}%</span>
+                            <span class="confidence-value ${confidenceBg}">${confidence.toFixed(4)}</span>
                         </div>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${percentage}%; background: ${progressBg}"></div>
+                            <div class="progress-fill" style="width: ${(confidence * 100)}%; background: ${progressBg}"></div>
                         </div>
                     </div>
 
