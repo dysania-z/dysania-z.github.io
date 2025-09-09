@@ -134,6 +134,17 @@
         .btn-secondary:hover {
             background: #cbd5e0;
         }
+        
+        .btn-green {
+            background: linear-gradient(45deg, #48bb78, #38a169);
+            color: white;
+            flex: 1;
+        }
+
+        .btn-green:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(72, 187, 120, 0.3);
+        }
 
         .btn:disabled {
             opacity: 0.6;
@@ -156,6 +167,14 @@
             padding: 25px;
             margin-bottom: 20px;
             border-left: 4px solid #667eea;
+        }
+        
+        .result-card.ai {
+            border-left-color: #fc8181;
+        }
+
+        .result-card.human {
+            border-left-color: #68d391;
         }
 
         .confidence-container {
@@ -336,6 +355,24 @@
             font-size: 0.8rem;
             color: #6c757d;
         }
+        
+        .batch-result-list {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .batch-text-preview {
+            font-size: 0.9rem;
+            color: #4a5568;
+            margin-bottom: 10px;
+            font-style: italic;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
         @media (max-width: 768px) {
             .container {
@@ -376,13 +413,16 @@
             <textarea 
                 id="textInput" 
                 class="text-input" 
-                placeholder="在此输入您想要检测的文本内容...&#10;&#10;系统将分析文本特征，判断是否由AI生成，并提供置信度评分。"
+                placeholder="在此输入您想要检测的文本内容...&#10;可输入多行文本，每行代表一个独立的检测任务"
             ></textarea>
         </div>
 
         <div class="button-group">
-            <button id="detectBtn" class="btn btn-primary">
-                🔍 开始检测
+            <button id="detectSingleBtn" class="btn btn-green">
+                🔍 单条检测
+            </button>
+            <button id="detectBatchBtn" class="btn btn-primary">
+                🚀 批量检测
             </button>
             <button id="clearBtn" class="btn btn-secondary">
                 🗑️ 清空
@@ -398,43 +438,10 @@
         </div>
 
         <div id="resultSection" class="result-section">
-            <div class="result-card">
-                <div class="confidence-container">
-                    <div class="confidence-label">
-                        <span class="confidence-text">AI生成置信度</span>
-                        <span id="confidenceValue" class="confidence-value">0%</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill" style="width: 0%"></div>
-                    </div>
+            <div id="singleResultContainer" style="display: none;">
                 </div>
-
-                <div class="decision-helper">
-                    <div class="decision-title">
-                        <div class="decision-icon"></div>
-                        辅助决策建议
-                    </div>
-                    <div id="decisionText" class="decision-text">
-                        等待检测结果...
-                    </div>
+            <div id="batchResultContainer" class="batch-result-list" style="display: none;">
                 </div>
-
-                <div class="metadata-section">
-                    <div class="metadata-title">检测信息</div>
-                    <div class="metadata-item">
-                        <span>预测结果:</span>
-                        <span id="predictionResult">-</span>
-                    </div>
-                    <div class="metadata-item">
-                        <span>文本哈希:</span>
-                        <span id="textHash">-</span>
-                    </div>
-                    <div class="metadata-item">
-                        <span>检测时间:</span>
-                        <span id="detectionTime">-</span>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 
@@ -448,35 +455,35 @@
             initializeElements() {
                 this.apiUrl = document.getElementById('apiUrl');
                 this.textInput = document.getElementById('textInput');
-                this.detectBtn = document.getElementById('detectBtn');
+                this.detectSingleBtn = document.getElementById('detectSingleBtn');
+                this.detectBatchBtn = document.getElementById('detectBatchBtn');
                 this.clearBtn = document.getElementById('clearBtn');
                 this.loading = document.getElementById('loading');
                 this.errorMessage = document.getElementById('errorMessage');
                 this.resultSection = document.getElementById('resultSection');
-                this.confidenceValue = document.getElementById('confidenceValue');
-                this.progressFill = document.getElementById('progressFill');
-                this.decisionText = document.getElementById('decisionText');
-                this.predictionResult = document.getElementById('predictionResult');
-                this.textHash = document.getElementById('textHash');
-                this.detectionTime = document.getElementById('detectionTime');
+                this.singleResultContainer = document.getElementById('singleResultContainer');
+                this.batchResultContainer = document.getElementById('batchResultContainer');
             }
 
             bindEvents() {
-                this.detectBtn.addEventListener('click', () => this.detectText());
+                this.detectSingleBtn.addEventListener('click', () => this.detectText('single'));
+                this.detectBatchBtn.addEventListener('click', () => this.detectText('batch'));
                 this.clearBtn.addEventListener('click', () => this.clearInput());
                 this.textInput.addEventListener('input', () => this.handleInputChange());
+                this.handleInputChange(); // 初始化时检查输入框状态
             }
 
             handleInputChange() {
                 const hasText = this.textInput.value.trim().length > 0;
-                this.detectBtn.disabled = !hasText;
+                this.detectSingleBtn.disabled = !hasText;
+                this.detectBatchBtn.disabled = !hasText;
                 
                 if (!hasText) {
                     this.hideResults();
                 }
             }
 
-            async detectText() {
+            async detectText(type) {
                 const text = this.textInput.value.trim();
                 
                 if (!text) {
@@ -486,36 +493,88 @@
 
                 this.showLoading();
                 this.hideError();
+                
+                if (type === 'single') {
+                    try {
+                        const result = await this.callBackendAPI('/detect/single', { text: text });
+                        this.hideLoading();
+                        this.showResults([result], 'single');
+                    } catch (error) {
+                        this.showError(error.message || '单文本检测失败，请稍后重试');
+                        console.error('Single detection error:', error);
+                    }
+                } else if (type === 'batch') {
+                    const texts = text.split('\n').filter(line => line.trim().length > 0);
+                    if (texts.length === 0) {
+                        this.showError('请输入有效的多行文本');
+                        this.hideLoading();
+                        return;
+                    }
 
-                try {
-                    const result = await this.callBackendAPI(text);
-                    this.showResults(result);
-                } catch (error) {
-                    this.showError(error.message || '检测服务暂时不可用，请稍后重试');
-                    console.error('Detection error:', error);
+                    try {
+                        // 提交批量任务
+                        const submission = await this.callBackendAPI('/detect/batch', { texts: texts });
+                        
+                        // 轮询获取结果
+                        this.pollForResult(submission.status_url);
+                        
+                    } catch (error) {
+                        this.showError(error.message || '批量检测提交失败，请稍后重试');
+                        console.error('Batch submission error:', error);
+                    }
                 }
             }
+            
+            async pollForResult(statusUrl) {
+                const checkInterval = 2000; // 2秒轮询一次
+                let isComplete = false;
+                
+                const polling = setInterval(async () => {
+                    try {
+                        const response = await fetch(`${this.apiUrl.value.trim()}${statusUrl}`);
+                        if (!response.ok) throw new Error(`HTTP错误: ${response.status}`);
+                        const result = await response.json();
+                        
+                        if (result.status === 'completed') {
+                            clearInterval(polling);
+                            this.hideLoading();
+                            this.showResults(result.results, 'batch');
+                        } else {
+                            // 可以在这里更新进度提示
+                            console.log(`批量任务处理中... 已完成 ${result.completed_count} 条，待处理 ${result.pending_count} 条`);
+                        }
+                    } catch (error) {
+                        clearInterval(polling);
+                        this.showError(error.message || '批量任务查询失败');
+                        console.error('Polling error:', error);
+                        this.hideLoading();
+                    }
+                }, checkInterval);
+            }
 
-            async callBackendAPI(text) {
+            async callBackendAPI(endpoint, data) {
                 const baseUrl = this.apiUrl.value.trim() || 'http://localhost:8000';
-                const endpoint = `${baseUrl}/detect/single`;
+                const fullUrl = `${baseUrl}${endpoint}`;
                 
                 try {
-                    const response = await fetch(endpoint, {
+                    const response = await fetch(fullUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ text: text })
+                        body: JSON.stringify(data)
                     });
 
                     if (!response.ok) {
+                        let errorDetail = await response.json().catch(() => ({}));
                         if (response.status === 404) {
                             throw new Error('API端点不存在，请检查后端API地址是否正确');
                         } else if (response.status === 500) {
                             throw new Error('服务器内部错误，请检查后端服务状态');
+                        } else if (response.status === 422) {
+                            throw new Error(`输入格式错误: ${JSON.stringify(errorDetail.detail)}`);
                         } else {
-                            throw new Error(`HTTP错误: ${response.status}`);
+                            throw new Error(`HTTP错误: ${response.status} - ${errorDetail.detail || '未知错误'}`);
                         }
                     }
 
@@ -531,48 +590,88 @@
 
             showLoading() {
                 this.loading.style.display = 'flex';
-                this.detectBtn.disabled = true;
+                this.detectSingleBtn.disabled = true;
+                this.detectBatchBtn.disabled = true;
                 this.hideResults();
             }
 
             hideLoading() {
                 this.loading.style.display = 'none';
-                this.detectBtn.disabled = false;
+                this.handleInputChange(); // 重新启用按钮
             }
 
-            showResults(result) {
+            showResults(results, type) {
                 this.hideLoading();
+                this.resultSection.style.display = 'block';
                 
-                // 从后端API结果中提取数据
+                if (type === 'single') {
+                    this.singleResultContainer.style.display = 'block';
+                    this.batchResultContainer.style.display = 'none';
+                    this.singleResultContainer.innerHTML = this.createResultCardHtml(results[0]);
+                } else if (type === 'batch') {
+                    this.singleResultContainer.style.display = 'none';
+                    this.batchResultContainer.style.display = 'flex';
+                    this.batchResultContainer.innerHTML = '';
+                    results.forEach((result, index) => {
+                        const originalText = this.textInput.value.split('\n').filter(line => line.trim().length > 0)[index] || '';
+                        this.batchResultContainer.innerHTML += this.createResultCardHtml(result, originalText);
+                    });
+                }
+            }
+            
+            createResultCardHtml(result, originalText = null) {
                 const { prediction, confidence, text_hash } = result;
-                
-                // 计算显示用的置信度百分比
                 const percentage = Math.round(confidence * 100);
                 const isAI = prediction === 1;
-                
-                // 更新置信度显示
-                this.confidenceValue.textContent = `${percentage}%`;
-                this.confidenceValue.className = isAI ? 'confidence-value ai-indicator' : 'confidence-value human-indicator';
-                
-                // 更新进度条
-                this.progressFill.style.width = `${percentage}%`;
-                this.progressFill.style.background = isAI ? 
-                    'linear-gradient(90deg, #fc8181, #f56565)' : 
-                    'linear-gradient(90deg, #68d391, #48bb78)';
-                
-                // 更新决策建议
-                this.updateDecisionText(confidence, isAI);
-                
-                // 更新元数据
-                this.updateMetadata(prediction, text_hash);
-                
-                // 显示结果
-                this.resultSection.style.display = 'block';
+                const decisionText = this.getDecisionText(confidence, isAI);
+                const resultClass = isAI ? 'ai' : 'human';
+                const progressBg = isAI ? 'linear-gradient(90deg, #fc8181, #f56565)' : 'linear-gradient(90deg, #68d391, #48bb78)';
+                const confidenceBg = isAI ? 'ai-indicator' : 'human-indicator';
+                const now = new Date();
+                const textPreviewHtml = originalText ? `<div class="batch-text-preview">${originalText.substring(0, 50)}...</div>` : '';
+
+                return `
+                <div class="result-card ${resultClass}">
+                    ${textPreviewHtml}
+                    <div class="confidence-container">
+                        <div class="confidence-label">
+                            <span class="confidence-text">AI生成置信度</span>
+                            <span class="confidence-value ${confidenceBg}">${percentage}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${percentage}%; background: ${progressBg}"></div>
+                        </div>
+                    </div>
+
+                    <div class="decision-helper">
+                        <div class="decision-title">
+                            <div class="decision-icon"></div>
+                            辅助决策建议
+                        </div>
+                        <div class="decision-text">${decisionText}</div>
+                    </div>
+
+                    <div class="metadata-section">
+                        <div class="metadata-title">检测信息</div>
+                        <div class="metadata-item">
+                            <span>预测结果:</span>
+                            <span>${prediction === 1 ? 'AI生成' : '人类创作'}</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span>文本哈希:</span>
+                            <span>${text_hash.substring(0, 8) + '...'}</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span>检测时间:</span>
+                            <span>${now.toLocaleTimeString('zh-CN')}</span>
+                        </div>
+                    </div>
+                </div>
+                `;
             }
 
-            updateDecisionText(confidence, isAI) {
+            getDecisionText(confidence, isAI) {
                 let text = '';
-                
                 if (confidence >= 0.8) {
                     text = isAI ? 
                         '🚨 高度疑似AI生成：文本表现出明显的AI生成特征，建议进行人工审核。' :
@@ -588,32 +687,21 @@
                         '👍 较可能是人类创作：检测到较少AI特征，倾向于人类创作。' :
                         '⚠️ 较可能是AI生成：虽然置信度不高，但仍建议谨慎对待。';
                 }
-                
-                this.decisionText.textContent = text;
-            }
-
-            updateMetadata(prediction, textHash) {
-                // 更新预测结果
-                this.predictionResult.textContent = prediction === 1 ? 'AI生成' : '人类创作';
-                
-                // 更新文本哈希
-                this.textHash.textContent = textHash.substring(0, 8) + '...';
-                
-                // 更新检测时间
-                const now = new Date();
-                this.detectionTime.textContent = now.toLocaleTimeString('zh-CN');
+                return text;
             }
 
             hideResults() {
                 this.resultSection.style.display = 'none';
+                this.singleResultContainer.innerHTML = '';
+                this.batchResultContainer.innerHTML = '';
             }
 
             clearInput() {
                 this.textInput.value = '';
-                this.detectBtn.disabled = true;
                 this.hideResults();
                 this.hideError();
                 this.textInput.focus();
+                this.handleInputChange();
             }
 
             showError(message) {
@@ -627,7 +715,6 @@
             }
         }
 
-        // 初始化应用
         document.addEventListener('DOMContentLoaded', () => {
             new AITextDetector();
         });
